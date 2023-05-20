@@ -1,5 +1,5 @@
 {
-  "name": "ws-ss-client",
+  "name": "ws-server-side-client",
   "version": "0.0.1",
   "description": "Server side library to connect to a web socket connector server ",
   "main": "dist/index.js",

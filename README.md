@@ -8,11 +8,11 @@ USE THIS CLIENT TO CONNECT TO A WEB SOCKET SERVER SET WITH
 
 ## Installation
 ```bash
-npm install --save ws-ss-client
+npm install --save ws-server-side-client
 ```
 ## Connection Setup
 ```typescript
-import { WebSocketServerSideClient } from "ws-ss-client";
+import { WebSocketServerSideClient } from "ws-server-side-client";
 
 export const wsClient = new WebSocketServerSideClient();
 
