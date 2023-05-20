@@ -1,0 +1,29 @@
+{
+  "name": "ws-ss-client",
+  "version": "0.0.1",
+  "description": "Server side library to connect to a web socket connector server ",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "tsc": "rm -rf ./dist; tsc"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ceduardorubio/web-socket-server-side-client.git"
+  },
+  "keywords": [
+    "web",
+    "socket",
+    "server",
+    "connection"
+  ],
+  "author": "carlos velásquez rubio",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}
