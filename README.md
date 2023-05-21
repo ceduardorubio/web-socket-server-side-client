@@ -4,7 +4,9 @@
 A web socket server side client for web socket process connector servers. Use this client to connect to a web socket server and send and receive messages.
 
 USE THIS CLIENT TO CONNECT TO A WEB SOCKET SERVER SET WITH 
-[web socket process connector](https://www.npmjs.com/package/web-socket-processes-connector)
+
+- [websocket node server](https://www.npmjs.com/package/ws-node-server) 
+- [web socket process connector](https://www.npmjs.com/package/web-socket-processes-connector)
 
 ## Installation
 ```bash
