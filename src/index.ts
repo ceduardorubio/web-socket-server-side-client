@@ -50,14 +50,16 @@ export class WebSocketServerSideClient {
     private _whenConnected :() => void                                 = () => {};
     private _ifAuthenticationFails :(authenticationError: any) => void = () => {};
    
-    constructor(connectionOptions:SocketConnectorOptions = null) {
+    private log :(msg:any ) => void | null = null;
+   
+    constructor(connectionOptions:SocketConnectorOptions = null,Log: (msg:any ) => void | null= null) {
         if(connectionOptions){
             this.onConnectionErrorReconnect = connectionOptions.onConnectionErrorReconnect || this.onConnectionErrorReconnect;
             this.authCallbackOnReconnect    = connectionOptions.authCallbackOnReconnect    || this.authCallbackOnReconnect;
             this.reconnectionTimeout        = connectionOptions.reconnectionTimeout        || this.reconnectionTimeout;
         }
+        this.log = Log;
     }
-
     private ReloadConnection = (reconnectionWait:number = this.reconnectionTimeout) => {
         if(this.reconnect ) {
             setTimeout(() => {
@@ -104,6 +106,7 @@ export class WebSocketServerSideClient {
     }
 
     private onConnMessage = (incomingData:any) => {
+        if(this.log) this.log(incomingData);
         let packageResponse:SocketPackageResponse = null;
         try {
             packageResponse = JSON.parse(incomingData);
