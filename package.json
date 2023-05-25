@@ -1,9 +1,10 @@
 {
   "name": "ws-server-side-client",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Server side library to connect to a web socket connector server ",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "tsc": "rm -rf ./dist; tsc"
   },
