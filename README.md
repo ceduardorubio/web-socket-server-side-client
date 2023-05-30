@@ -2,11 +2,12 @@
 
 ## Description
 A web socket server side client for web socket process connector servers. Use this client to connect to a web socket server and send and receive messages.
+## Website
+[websocket-server-side-client](https://ceduardorubio.github.io/websocketserversideclient/) (under construction)
+## Usage
+USE THIS CLIENT TO CONNECT TO A WEB SOCKET SERVER SET WITH:
 
-USE THIS CLIENT TO CONNECT TO A WEB SOCKET SERVER SET WITH 
-
-- [websocket node server](https://www.npmjs.com/package/ws-node-server) 
-- [web socket process connector](https://www.npmjs.com/package/web-socket-processes-connector)
+[websocket node server](https://www.npmjs.com/package/ws-node-server)
 
 ## Installation
 ```bash
@@ -88,6 +89,11 @@ const AfterConnectedProcedure = () => {
             globalUsers = users;
         }
     });
+
+    // send a broadcast message to all clients in the group1, except the sender, no matter the group the sender is in 
+    wsClient.Broadcast("newUser","group1" ,{name:"John Doe"});
+    // send a broadcast message to all clients 
+    wsClient.Broadcast("keepAlive",null  ,{name: sessionData["..."]});
     // join the group1 to receive messages from the server for this group
     wsClient.joinGroup('group1');
     // leave the group1
@@ -169,3 +175,5 @@ Carlos Velasquez - [ceduardorubio](https://github.com/ceduardorubio)
     - Initial release
 ### 0.0.4
     - Fix type module error
+### 0.0.7
+    - Broadcast message to all clients in a group

@@ -207,6 +207,10 @@ export class WebSocketServerSideClient {
         this.broadcastListeners[subject].push(cb);
     }
 
+    public Broadcast = <T = any>(subject:string,group:string| null,data:T) => {
+        this.Send('broadcast',subject,group,data,null);
+    }
+
     public get close (){
         this.reconnect = false;
         this.ClearWebSocket();
