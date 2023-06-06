@@ -22,16 +22,18 @@ interface SocketListeners {
     [key: string]:  ((response: any) => void)[]
 }
 
-type SocketAction = 'group' | 'call' | 'auth' | 'broadcast';
+type SocketAction = 'group' | 'call' | 'auth' | 'broadcast' | 'channel';
 interface SocketConnectorOptions {
     onConnectionErrorReconnect?: boolean,
     authCallbackOnReconnect?   : boolean,
     reconnectionTimeout?       : number,
+    maxReconnectionAttempts?   : number,
+    logConnectionTry?          : boolean
 }
 export class WebSocketServerSideClient {
-    public webSocket: WebSocket = null;
+    public  webSocket: WebSocket = null;
     private packageID: number    = 0;
-    private _session  : any       = null
+    private _session  : any      = null
 
     private onServerResponse:SocketServerCallsStack = {};
     private broadcastListeners :SocketListeners     = {};
@@ -44,6 +46,9 @@ export class WebSocketServerSideClient {
     private onConnectionErrorReconnect :boolean = true;
     private authCallbackOnReconnect    :boolean = true;
     private reconnectionTimeout        :number  = 2_000;
+    private maxReconnectionAttempts    :number  = 20;
+    private reconnectionAttempts       :number  = 0;
+    private logConnectionTry           :boolean = false;
 
     private _onConnectionError :(error: any, info: any) => void         = console.error;
     private _onConnectionClose :(error: any, info: any) => void         = console.log;
@@ -57,20 +62,30 @@ export class WebSocketServerSideClient {
             this.onConnectionErrorReconnect = connectionOptions.onConnectionErrorReconnect || this.onConnectionErrorReconnect;
             this.authCallbackOnReconnect    = connectionOptions.authCallbackOnReconnect    || this.authCallbackOnReconnect;
             this.reconnectionTimeout        = connectionOptions.reconnectionTimeout        || this.reconnectionTimeout;
+            this.maxReconnectionAttempts    = connectionOptions.maxReconnectionAttempts    || this.maxReconnectionAttempts;
+            this.logConnectionTry           = connectionOptions.logConnectionTry           || this.logConnectionTry;
         }
         this.log = Log;
     }
+
+    public isSocketConnected = () => {
+        return this.webSocket && this.webSocket.readyState == WebSocket.OPEN;
+    }
     private ReloadConnection = (reconnectionWait:number = this.reconnectionTimeout) => {
-        if(this.reconnect ) {
-            setTimeout(() => {
-                try {
-                    this.ClearWebSocket();
-                    this.StartSocket();                
-                } catch(e){
-                    this._onConnectionError('connection error',e);
-                }
-            },reconnectionWait);
-        }
+        if(this.reconnectionAttempts < this.maxReconnectionAttempts){
+            if(this.reconnect ) {
+                setTimeout(() => {
+                    try {
+                        this.ClearWebSocket();
+                        this.StartSocket();                
+                    } catch(e){
+                        this._onConnectionError('connection error',e);
+                    }
+                },reconnectionWait);
+            }
+        } else {
+            this._onConnectionError('maxReconnectionAttempts','max reconnection attempts reached');
+        }            
     }
 
     private ResetControllers = () => {
@@ -81,7 +96,6 @@ export class WebSocketServerSideClient {
     }
 
     private StartSocket = () => {
-        this.ResetControllers();
         this.webSocket = new WebSocket(this.url);
         this.webSocket.on('error',this.onConnError);
         this.webSocket.on('close',this.onConnClose);
@@ -97,12 +111,15 @@ export class WebSocketServerSideClient {
     }
 
     private onConnError = (e:any) => {
-        this._onConnectionError('connection error',e);
+        this._onConnectionError('connectionError',e);
+        this.reconnectionAttempts++;
         if (this.onConnectionErrorReconnect) this.ReloadConnection();
     }
 
     private onConnClose = (e:any) => {
-        if (this.session) this._onConnectionClose('connection closed',e);
+        if (this.session) this._onConnectionClose('connectionClosed',e);
+        this.reconnectionAttempts++;
+        if (this.onConnectionErrorReconnect) this.ReloadConnection();
     }
 
     private onConnMessage = (incomingData:any) => {
@@ -111,7 +128,7 @@ export class WebSocketServerSideClient {
         try {
             packageResponse = JSON.parse(incomingData);
         } catch (e) {
-            this._onConnectionError( 'invalid incoming data: ', incomingData);
+            this._onConnectionError( 'invalidIncomingData', incomingData);
         }
         this.HandleServerMessage(packageResponse);
     }
@@ -124,6 +141,7 @@ export class WebSocketServerSideClient {
                 this._ifAuthenticationFails(error);
             } else {
                 this._session = sessionData;
+                this.reconnectionAttempts = 0;
                 if (this.hasBeingConnectedBefore) {
                     if (this.authCallbackOnReconnect) this._whenConnected();
                 } else {
@@ -143,7 +161,7 @@ export class WebSocketServerSideClient {
                 listeners.forEach(fn => fn(response));
             }
         } else {
-            let isServerResponse = info.action == "call" || info.action == "group" || info.action == "auth"
+            let isServerResponse = info.action == "call" || info.action == "group" || info.action == "auth" || info.action == "channel";
             if(isServerResponse){
                 let { packageID } = info;
                 if(this.onServerResponse[packageID]){
@@ -157,23 +175,27 @@ export class WebSocketServerSideClient {
 
     private Send = <T = any> (action:SocketAction,request:string | number,group:string = '',data:any = null,cbOnResponse:(error: any, response: T) => void  = null) => {
         if(this._session || (action == 'auth' && request == 'login')){
-            let info: SocketPackageInfo = { action,request,group,packageID:this.packageID } ;
-            let body:SocketPackage      = { info, data}
-            if(cbOnResponse) {
-                this.onServerResponse[this.packageID] = cbOnResponse;
-                this.packageID++;
+            if(this.isSocketConnected()){
+                let info: SocketPackageInfo = { action,request,group,packageID:this.packageID } ;
+                let body:SocketPackage      = { info, data}
+                if(cbOnResponse) {
+                    this.onServerResponse[this.packageID] = cbOnResponse;
+                    this.packageID++;
+                }
+                this.webSocket.send(JSON.stringify(body));
+            } else {
+                cbOnResponse('socket not connected',null);
             }
-            this.webSocket.send(JSON.stringify(body));
         } else {
             cbOnResponse('not authenticated',null);
         }
     }
 
-    public connectTo = <T = any>(websocketServerURL:string,newAuthCredentials:T = null) => {
+    public connectTo = <T = any>(websocketServerURL:string = "/",newAuthCredentials:T = null) => {
         let u = websocketServerURL;
         if(u.startsWith('http://'))  u = u.replace('http://','ws://')
         if(u.startsWith('https://')) u = u.replace('https://','wss://')
-        if(u.startsWith('/') ) u = 'ws://' + window.location.hostname + u;
+        if(u.startsWith('/') ) u = 'ws://localhost' + u;
         this.url                      = u;
         this.reconnect                = true;
         this.hasBeingConnectedBefore  = false;
@@ -206,6 +228,53 @@ export class WebSocketServerSideClient {
         if(!this.broadcastListeners[subject]) this.broadcastListeners[subject] = [];
         this.broadcastListeners[subject].push(cb);
     }
+
+
+
+
+    // ENABLE CLIENT DIRECT MESSAGING
+
+    public getAvailableClients = (cb:(error: any, response: {uuid:string,publicAlias:string,isAvailable:boolean,publicInmutableData:any,connected:boolean}[]) => void = null) => {
+        this.Send('channel','getAvailableClients',null,null,cb);
+    }
+
+    public updatePublicAlias = (publicAlias:string,cb:(error: any, response: {currentAlias:string}) => void = null) => {
+        this.Send('channel','updatePublicAlias',null,{publicAlias},cb);
+    }
+
+    public getPublicAlias = (cb:(error: any, response: {currentAlias:string}) => void = null) => {
+        this.Send('channel','getPublicAlias',null,{},cb);
+    }
+
+    public updatePublicAvailability = (isAvailable:boolean,cb:(error: any, response: {currentAvailability:boolean}) => void = null) => {
+        this.Send('channel','updatePublicAvailability',null,{isAvailable},cb);
+    }
+
+    public getPublicAvailability = (cb:(error: any, response: {currentAvailability:boolean}) => void = null) => {
+        this.Send('channel','getPublicAvailability',null,{},cb);
+    }
+
+    public sentToClient = <T = any>(uuid:string,data:T,cb:(error: any, response: {sent:boolean}) => void = null) => {
+        this.Send('channel','sendToClient',uuid,data,cb);
+    }
+
+    public onClientMessageReceived = <T = any>(cb:(incomingData: {fromUUID:string,data:T}) => void) => {
+        this.onMessageReceived<{fromUUID:string,data:T}>('msgFromClient',cb);
+    }
+
+    public onClientUpdate = (cb:(incomingData: {uuid:string,publicAlias:string,isAvailable:boolean,publicInmutableData:any,connected:boolean}) => void) => {
+        this.onMessageReceived<{uuid:string,publicAlias:string,isAvailable:boolean,publicInmutableData:any,connected:boolean}>('__updateClientsState',cb);
+    }
+
+    public setAvailable = (cb:(error: any, response: {currentAvailability:boolean}) => void = null) => {
+        this.Send('channel','updatePublicAvailability',null,{isAvailable:true},cb);
+    }
+
+    public setUnavailable = (cb:(error: any, response: {currentAvailability:boolean}) => void = null) => {
+        this.Send('channel','updatePublicAvailability',null,{isAvailable:false},cb);
+    }
+
+    /// BROADCASTING
 
     public Broadcast = <T = any>(subject:string,group:string| null,data:T) => {
         this.Send('broadcast',subject,group,data,null);

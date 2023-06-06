@@ -94,6 +94,80 @@ const AfterConnectedProcedure = () => {
     wsClient.Broadcast("newUser","group1" ,{name:"John Doe"});
     // send a broadcast message to all clients 
     wsClient.Broadcast("keepAlive",null  ,{name: sessionData["..."]});
+
+
+        let connectedClients:{uuid:string,publicAlias:string,isAvailable:boolean,publicInmutableData:any,connected:boolean}[] = []
+
+    // get all connected ws-clients
+    wsClient.getAvailableClients((err:any,clients:{uuid:string,publicAlias:string,isAvailable:boolean,publicInmutableData:any,connected:boolean}[]) =>{
+        connectedClients = clients;
+    })
+    // set the public availability of this client as true (available to receive direct messages from other clients)
+    wsClient.updatePublicAvailability(true,(error: any, response: {currentAvailability:boolean}) => {
+        if(error) {
+            console.log('Error:',error);
+            return;
+        } else {
+            console.log({currentAvailability});
+        }
+    });
+
+    // listen to all clients updates
+    // when a client connects or disconnects, this listener will be called
+    // when a client updates its public alias, this listener will be called
+    // when a client updates its public availability, this listener will be called
+    wsClient.onClientUpdate((incomingData: {uuid:string,publicAlias:string,isAvailable:boolean,publicInmutableData:any,connected:boolean}) =>{
+        // get the public alias of the client that sent the message
+        let {uuid,publicAlias,isAvailable,publicInmutableData,connected} = incomingData;
+        let findClient = connectedClients.find(client => client.uuid === uuid);
+        if(findClient) {
+            findClient.publicAlias = publicAlias;
+            findClient.isAvailable = isAvailable;
+            findClient.publicInmutableData = publicInmutableData;
+            findClient.connected = connected;
+        } else {
+            connectedClients.push({uuid,publicAlias,isAvailable,publicInmutableData,connected});
+        }
+
+        connectedClients = connectedClients.filter(client => client.connected);
+    })
+
+    // set the public availability of this client as true (available to receive and send direct messages from other clients, and receive update client broadcast messages from the server)
+    wsClient.setAvailable((error: any, response: {currentAvailability:boolean})=>{
+        console.log({currentAvailability});
+    });
+
+    // set the public availability of this client as false (not available to receive and send direct messages from other clients, and receive update client broadcast messages from the server)
+    wsClient.setUnavailable((error: any, response: {currentAvailability:boolean})=>{
+        console.log({currentAvailability});
+    });
+
+    // when a client sends a message to this client, this listener will be called
+    wsClient.onClientMessageReceived<any>((error,incomingData: {fromUUID:string,data:any}) => {
+        // get the public alias of the client that sent the message
+        let {fromUUID,data} = incomingData;
+        let clientAlias = connectedClients.find(client => client.uuid === fromUUID).publicAlias;
+        console.log(`Message from ${clientAlias}:`,data);
+    });
+
+    let selectedUserPublicAlias = '...';
+    let selectedUserUUID = connectedClients.find(client => client.publicAlias === selectedUserPublicAlias).uuid;
+
+    let msg = {
+        ack: "ok!!! message received ",
+    }
+
+    // send a message to a specific client with the its uuid
+    wsClient.sentToClient<any>(selectedUserUUID,msg,(error: any, response: {sent:boolean})=> {
+        if(error) {
+            console.log('Error:',error);
+            return;
+        } else {
+            console.log({sent});
+        }
+    });
+
+
     // join the group1 to receive messages from the server for this group
     wsClient.joinGroup('group1');
     // leave the group1
@@ -177,3 +251,12 @@ Carlos Velasquez - [ceduardorubio](https://github.com/ceduardorubio)
     - Fix type module error
 ### 0.0.7
     - Broadcast message to all clients in a group
+### 0.1.0
+    - Get a list all connected clients (alias and uuid)
+    - Send message to a specific client
+    - Update public availability
+    - Update public alias
+    - Availability of the client controls the ability to receive direct messages from other clients, and receive update client broadcast messages from the server
+    - Listening on update client broadcast messages from the server
+    - logConnectionTry: connectionOptions.connectionOptions (default: false)
+        logs the connection try
